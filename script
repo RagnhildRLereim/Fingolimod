@@ -1,0 +1,198 @@
+source("http://bioconductor.org/biocLite.R")
+biocLite("qvalue")
+
+library(limma)
+library(statmod)
+library(ggplot2)
+library(gridExtra)
+library(qvalue)
+
+setwd("~/1_Prosjekter/Fingolimod/New analysis/R/RBD")
+## Importing the data file, removing NAs and making accession numbers row names
+data <- read.csv("./data/Simple_Main_contRemoved.txt",
+                 sep = "\t")
+data <- na.omit(data)
+data <- data.frame(data)
+
+rownames(data) <- data[,4]
+
+## Plotting histograms to see the distribution of the sample intensities
+
+hist.title <- c("Placebo 1DM A","Placebo 1DM B","Placebo 1DM C",
+                "Placebo 1RM A","Placebo 1RM B","Placebo 1RM C",
+                "Placebo 3RM A","Placebo 3RM B","Placebo 3RM C",
+                "Fingolimod 1DM A","Fingolimod 1DM B","Fingolimod 1DM C",
+                "Fingolimod 1RM A","Fingolimod 1RM B","Fingolimod 1RM C",
+                "Fingolimod 3RM A","Fingolimod 3RM B","Fingolimod 3RM C")
+
+hists <- list()
+j <- c(0)
+
+for (i in 16:33){
+  j=j+1
+  histplots <- eval(substitute(ggplot(data= data, aes(x= data[,i]))+ theme_gray()+ geom_histogram(binwidth= 0.05, color = "black") + 
+    ggtitle(hist.title[j])+
+    labs(x=expression('Log'[2]* " relative abundance"), y ="Frequency")+
+    theme(axis.title = element_blank(),plot.title = element_text(margin = margin(b = -20),hjust=0.1))+
+  lims(x = c(-1,1))+ theme(title = element_text(lineheight = -2), plot.title = element_text(size = 8),
+                           plot.margin = unit(c(0.1,0,0.5,0.1), "cm")), list(i=i)))
+  hists[[j]] <- histplots
+}
+
+grid.arrange(hists[[1]],hists[[2]],hists[[3]],
+             hists[[4]],hists[[5]],hists[[6]],
+             hists[[7]],hists[[8]],hists[[9]],
+             hists[[10]],hists[[11]],hists[[12]],
+             hists[[13]],hists[[14]],hists[[15]],
+             hists[[16]],hists[[17]],hists[[18]],
+             ncol = 3)
+
+
+## Making the annotation for the design matrix
+vec1 <- c("batch",1,2,2,1,2,2,1,2,2,1,1,2,1,1,2,1,1,2)
+vec2 <- c("cond",1,1,1,2,2,2,3,3,3,4,4,4,5,5,5,6,6,6)
+vec3 <- c("test",seq(from = 1, to = 18, by = 1))
+data.batch <- cbind(vec1,vec2, vec3)
+colnames(data.batch) <- data.batch[1,]
+data.batch <- data.batch[-1,]
+data.batch <- data.frame(data.batch)
+rownames(data.batch) <-colnames(data)[16:33]
+
+## Investigating sample distribution and batch effect on an MDS plot
+par(mfrow=c(1,2))
+plotMDS(data[,16:33])
+plotMDS(data[,16:33], labels = data.batch$batch)
+par(mfrow=c(1,1))
+## Making the design matrix
+design <- model.matrix(~ 0 + cond + batch, 
+                       data = data.batch)
+colnames(design) <- c("P6", "P7", "P9","F6", "F7", "F9", "batch")
+
+## Doing limma on expression columns
+model <- lmFit(data[,16:33], design = design)
+hist.title <- c("Placebo 6DM", "Placebo 1RM", "Placebo 3RM",
+                "Fingolimod 6DM", "Fingolimod 1RM", "Fingolimod 3RM", "batch")
+model.df <- data.frame(model$coefficients)
+j=0
+for (i in 1:7){
+  j=j+1
+  histplots <- eval(substitute(ggplot(data= data, aes(x= model.df[,i]))+ theme_gray()+ geom_histogram(binwidth= 0.05, color = "black") + 
+                                 ggtitle(hist.title[j])+
+                                 labs(x=expression('Log'[2]* " relative abundance"), y ="Frequency")+
+                                 theme(axis.title = element_blank(),plot.title = element_text(margin = margin(b = -20),hjust=0.1))+
+                                 lims(x = c(-1,1))+ theme(title = element_text(lineheight = -2), plot.title = element_text(size = 8),
+                                                          plot.margin = unit(c(0.1,0,0.5,0.1), "cm")), list(i=i)))
+  hists[[j]] <- histplots
+}
+print(hists[[7]])
+grid.arrange(hists[[1]],hists[[2]],hists[[3]],
+             hists[[4]],hists[[5]],hists[[6]],
+             ncol = 3)
+
+## saving the results and standard errors of the coefficients
+SD <- model$sigma*model$stdev.unscaled
+Table <- cbind(model$coefficients, SD)
+ 
+## specifying contrasts
+con <- makeContrasts(F6-P6,
+                     F7-P7, 
+                     F9-P9,
+                     levels = design)
+
+## Testing the contrasts
+contr <- contrasts.fit(model, contrasts = con)
+res.Bayes <- eBayes(contr)
+results <- decideTests(res.Bayes)
+
+FinalTable <- cbind(data,res.Bayes)
+
+## write.csv(design, file = "Design_1.csv")
+## write.csv(FinalTable, file = "FinalTable_1.csv")
+
+top <- topTable(fit = res.Bayes,
+                adjust.method = "BH")
+top[top$adj.P.Val<0.05,]
+
+## Plotting
+
+setwd("~/1_Prosjekter/Fingolimod/New analysis/R/RBD/test")
+library(ggplot2)
+
+Proteins <- c("O08530","O35448","Q80SZ7","P03995","P60202","P04370","P12023", "P17047", "Q99P72", "P08551")
+Gene.short <- c("S1PR1", "PPT2", "GNG5", "GFAP", "PLP", "MBP", "APP", "MAC3", "NOGO", "NFL")
+pd <- position_dodge(0.1)
+plotlist <- list()
+
+
+for (i in seq(1:length(Proteins))){
+  Table.Proteins <- data.frame(Table[rownames(Table) %in% Proteins[i],])
+  mean <- Table.Proteins[1:6,]
+  sd <- Table.Proteins[8:13,]
+  rea.Proteins <- cbind(mean, sd)
+  rownames(rea.Proteins) <- c("P6", "P7", "P9", "F6", "F7", "F9")
+  rea.Proteins <- data.frame(rea.Proteins)
+  rea.Proteins$group <- c(rep("Placebo",3), 
+                     rep("Fingolimod",3))
+  rea.Proteins$factor <- c(rep(c("6DM", "1RM", "3RM"),2))
+  rea.Proteins$factor <- factor(rea.Proteins$factor, levels = c("6DM", "1RM", "3RM"))
+  if (i!=1) b <-"none"
+  if(i<=3) val <- c(-1,0.6)
+  if(i>3) val <- c(-0.6,0.4)
+  rea.Proteins$group <- factor(rea.Proteins$group, levels = c("Placebo", "Fingolimod"))
+  Proteins.plot <- ggplot(data= rea.Proteins, aes(x= rea.Proteins$factor,
+                                        y= mean,
+                                        color = group,
+                                        group = group),
+                     col = c("black","grey"))
+  name <- paste("Plot", Proteins[i],Gene.short[i],".pdf")
+  plot <- Proteins.plot  + 
+    geom_errorbar(aes(ymin= mean-sd, 
+                      ymax= mean+sd,
+                      width = .1),
+                  col = "darkgrey",
+                  position = pd) +
+    geom_point(cex=4, position = pd)+
+    xlab("Condition")+
+    ylab(expression('Log'[2]* " relative abundance"))+
+    ylim(val)+
+    ggtitle(paste(Gene.short[i]))+
+    scale_color_hue(name= "Treatment")+
+    theme(legend.position = c(0.05,0.05),
+          legend.justification = c(0.05,0.05),
+          legend.key = element_blank(),
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          panel.background = element_blank(), axis.line = element_line(colour = "black"),
+          title = element_text(lineheight = -2, size = 20),
+          axis.text = element_text(size = 14),
+          axis.title = element_text(size=12),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 14))
+  plotlist[[i]] <- plot
+}
+print(plotlist[[9]])
+library(gridExtra)
+
+Significant <- grid.arrange(plotlist[[1]],
+                            plotlist[[3]]+theme(legend.position="none"),
+                            ncol=2)
+PPt2 <- plot(plotlist[[10]])
+Not.Sign <- grid.arrange(plotlist[[4]],
+                         plotlist[[7]]+ theme(legend.position="none"),
+                         plotlist[[5]]+ theme(legend.position="none"),
+                         plotlist[[6]]+ theme(legend.position="none"),
+                         plotlist[[8]]+ theme(legend.position="none"),
+                         plotlist[[9]]+ theme(legend.position="none"),
+                         plotlist[[10]]+ theme(legend.position="none"),
+                         ncol=2)
+pdfs <- pdf("plots.pdf")
+for (i in 1:8){
+  print(plotlist[[i]])
+}
+dev.off()
+
+for(i in 1:8){
+  file_name = paste("plot",i,".png", sep = "")
+  png(file_name)
+  print(plotlist[[i]])
+  dev.off()
+  }
