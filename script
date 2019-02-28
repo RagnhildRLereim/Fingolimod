@@ -18,10 +18,10 @@ rownames(data) <- data[,4]
 
 ## Plotting histograms to see the distribution of the sample intensities
 
-hist.title <- c("Placebo 1DM A","Placebo 1DM B","Placebo 1DM C",
+hist.title <- c("Placebo DM A","Placebo DM B","Placebo DM C",
                 "Placebo 1RM A","Placebo 1RM B","Placebo 1RM C",
                 "Placebo 3RM A","Placebo 3RM B","Placebo 3RM C",
-                "Fingolimod 1DM A","Fingolimod 1DM B","Fingolimod 1DM C",
+                "Fingolimod DM A","Fingolimod DM B","Fingolimod DM C",
                 "Fingolimod 1RM A","Fingolimod 1RM B","Fingolimod 1RM C",
                 "Fingolimod 3RM A","Fingolimod 3RM B","Fingolimod 3RM C")
 
@@ -70,8 +70,8 @@ colnames(design) <- c("P6", "P7", "P9","F6", "F7", "F9", "batch")
 
 ## Doing limma on expression columns
 model <- lmFit(data[,16:33], design = design)
-hist.title <- c("Placebo 6DM", "Placebo 1RM", "Placebo 3RM",
-                "Fingolimod 6DM", "Fingolimod 1RM", "Fingolimod 3RM", "batch")
+hist.title <- c("Placebo DM", "Placebo 1RM", "Placebo 3RM",
+                "Fingolimod DM", "Fingolimod 1RM", "Fingolimod 3RM", "batch")
 model.df <- data.frame(model$coefficients)
 j=0
 for (i in 1:7){
@@ -111,12 +111,11 @@ FinalTable <- cbind(data,res.Bayes)
 
 top <- topTable(fit = res.Bayes,
                 adjust.method = "BH")
-top[top$adj.P.Val<0.05,]
+top[top$adj.P.Val<0.01,]
 
 ## Plotting
 
 setwd("~/1_Prosjekter/Fingolimod/New analysis/R/RBD/test")
-library(ggplot2)
 
 Proteins <- c("O08530","O35448","Q80SZ7","P03995","P60202","P04370","P12023", "P17047", "Q99P72", "P08551")
 Gene.short <- c("S1PR1", "PPT2", "GNG5", "GFAP", "PLP", "MBP", "APP", "MAC3", "NOGO", "NFL")
